@@ -5,6 +5,11 @@ spring:
   application:
     name: user-service
 
+  datasource:
+    url: ${USER_DATASOURCE_URL}
+    username: ${USER_DATASOURCE_USERNAME}
+    password: ${USER_DATASOURCE_PASSWORD}
+
 management:
   endpoints:
     web:
