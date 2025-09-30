@@ -1,20 +1,68 @@
+kakao:
+  client-id: ${KAKAO_CLIENT_ID}
+  client-secret: ${KAKAO_CLIENT_SECRET}
+  redirect-uri: ${KAKAO_REDIRECT_URI}
+  admin-key: ${KAKAO_ADMIN_KEY}
+
 server:
   port: 8080
 
 spring:
-  application:
-    name: user-service
+  autoconfigure:
+  cache:
+    type: none
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update   # 처음엔 create 또는 create-drop도 가능
+      properties:
+        hibernate:
+          format_sql: true
+          show_sql: true
 
   datasource:
-    url: ${USER_DATASOURCE_URL}
-    username: ${USER_DATASOURCE_USERNAME}
-    password: ${USER_DATASOURCE_PASSWORD}
+    url: jdbc:mysql://localhost:3306/kpaas_report_db
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-  endpoint:
-    health:
-      show-details: always
+  security:
+    oauth2:
+      client:
+        registration:
+          kakao:
+            client-id: ${KAKAO_CLIENT_ID}
+            client-authentication-method: client_secret_post
+            client-secret: ${KAKAO_CLIENT_SECRET}
+            authorization-grant-type: authorization_code
+            scope: # https://developers.kakao.com/docs/latest/ko/kakaologin/common#user-info
+              - profile_nickname
+              - profile_image
+            redirect-uri: ${KAKAO_REDIRECT_URI}
+            client-name: Kakao
+
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-info-authentication-method: header
+            user-name-attribute: id # Kakao 응답 값 id, connected_at, properties, kakao_account 중 id 지정
+
+
+jwt:
+  issuer: Hyerim kim
+  secret: "As8Wt6x5a6HBpJ2OTJUiTSenpxgGVZdLdiPaWF4F670="
+  access-token-validity: 3600000 #엑세스 토큰 만료 시간
+  refresh-token-validity: 120960000 #리프레시 토큰 만료 시간
+
+
+cloud:
+  aws:
+    credentials:
+      access-key: ${aws_access_key}
+      secret-key: ${aws_secret_key}
+
+    region:
+      static: ap-northeast-2

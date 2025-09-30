@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>로그인 성공</title>
+  <style>
+    :root { --bg:#0b1020; --card:#121931; --text:#e9ecf1; --sub:#9aa4bf; --accent:#7aa2ff; --ok:#3ddc97; --err:#ff6b6b; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(1200px 800px at 100% -20%, #1b2550, #0b1020);
+      color: var(--text); min-height: 100svh; display: grid; place-items: center; padding: 24px;
+    }
+    .card {
+      width: 100%; max-width: 760px; background: linear-gradient(180deg, #141c38, #101731);
+      border: 1px solid rgba(255,255,255,.08); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.35);
+      padding: 24px;
+    }
+    h1 { margin: 0 0 8px; font-size: 22px; letter-spacing: .1px; }
+    p.desc { margin: 0 0 18px; color: var(--sub); line-height: 1.5; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 20px; }
+    button, a.btn {
+      appearance: none; border: 1px solid rgba(255,255,255,.12); color: var(--text);
+      background: #0f1530; padding: 10px 14px; border-radius: 10px; cursor: pointer; text-decoration: none;
+    }
+    button:hover, a.btn:hover { border-color: rgba(255,255,255,.3); }
+    .hint { font-size: 13px; color: var(--sub); margin-top: -6px; }
+    pre {
+      margin: 0; background: #0b1126; color: #d9e1ff; border: 1px solid rgba(255,255,255,.08);
+      padding: 14px; border-radius: 10px; max-height: 420px; overflow: auto; font-size: 13px;
+    }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; margin-left: 8px; background: rgba(122,162,255,.15); color: var(--accent); border: 1px solid rgba(122,162,255,.35);}
+    .ok { color: var(--ok); }
+    .err { color: var(--err); }
+    .footer { margin-top: 14px; font-size: 12px; color: var(--sub); }
+  </style>
+</head>
+<body>
+<main class="card">
+  <h1>로그인 성공 🎉 <span id="statusTag" class="tag">쿠키 설정됨</span></h1>
+  <p class="desc">
+    카카오 로그인 완료! 서버가 <code>HttpOnly</code> 쿠키로 토큰을 설정했어요.
+    아래 버튼으로 보호된 API 호출이 되는지 바로 확인해보세요.
+  </p>
+
+  <div class="row">
+    <a class="btn" href="/swagger-ui/index.html">Swagger 열기</a>
+    <button id="btnMe">/auth/me 호출</button>
+    <!-- 필요하면 리프레시·로그아웃 버튼을 여기에 추가하세요 -->
+  </div>
+  <div class="hint">참고: <code>HttpOnly</code> 쿠키는 JS에서 읽을 수 없지만, 같은 오리진 요청 시 자동으로 전송됩니다.</div>
+
+  <h2 style="margin:20px 0 10px; font-size:16px;">응답</h2>
+  <pre id="output">{ 여기에 응답이 표시됩니다 }</pre>
+
+  <div class="footer">
+    문제가 있나요? <span class="err">401/403</span>이면 토큰 미전달 가능성,
+    <span class="err">404</span>면 경로 미매핑 가능성을 확인하세요.
+  </div>
+</main>
+
+<script>
+  const $ = s => document.querySelector(s);
+  const out = $("#output");
+  const statusTag = $("#statusTag");
+
+  async function callMe() {
+    out.textContent = "요청 중...";
+    try {
+      const res = await fetch("/auth/me", {
+        method: "GET",
+        credentials: "include" // 쿠키 포함
+      });
+      const text = await res.text();
+      let pretty = text;
+      try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+      out.textContent = `HTTP ${res.status}\n\n${pretty}`;
+      statusTag.textContent = res.ok ? "인증 OK" : "인증 실패";
+      statusTag.style.borderColor = res.ok ? "rgba(61,220,151,.5)" : "rgba(255,107,107,.5)";
+      statusTag.style.background = res.ok ? "rgba(61,220,151,.12)" : "rgba(255,107,107,.12)";
+      statusTag.style.color = res.ok ? "var(--ok)" : "var(--err)";
+    } catch (e) {
+      out.textContent = "오류: " + (e?.message || e);
+      statusTag.textContent = "에러";
+      statusTag.classList.add("err");
+    }
+  }
+
+  $("#btnMe").addEventListener("click", callMe);
+</script>
+</body>
+</html>

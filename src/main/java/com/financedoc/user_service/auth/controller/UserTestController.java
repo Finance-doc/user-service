@@ -1,4 +1,4 @@
-package com.financedoc.user_service.controller;
+package com.financedoc.user_service.auth.controller;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;

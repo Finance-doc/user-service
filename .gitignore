@@ -35,3 +35,13 @@ out/
 
 ### VS Code ###
 .vscode/
+
+src/main/resources/.env
+application.yml
+
+.env
+.DS_Store.idea/
+.gradle/
+build/
+out/
+*.iml
