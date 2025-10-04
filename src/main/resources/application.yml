@@ -1,3 +1,8 @@
+spring:
+  profiles:
+    active: k8s
+---
+
 kakao:
   client-id: ${KAKAO_CLIENT_ID}
   client-secret: ${KAKAO_CLIENT_SECRET}
@@ -11,21 +16,6 @@ spring:
   autoconfigure:
   cache:
     type: none
-
-  jpa:
-    open-in-view: false
-    hibernate:
-      ddl-auto: update   # 처음엔 create 또는 create-drop도 가능
-      properties:
-        hibernate:
-          format_sql: true
-          show_sql: true
-
-  datasource:
-    url: jdbc:mysql://localhost:3306/kpaas_report_db
-    username: ${DATABASE_USERNAME}
-    password: ${DATABASE_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
 
   security:
     oauth2:
@@ -53,10 +43,9 @@ spring:
 
 jwt:
   issuer: Hyerim kim
-  secret: "As8Wt6x5a6HBpJ2OTJUiTSenpxgGVZdLdiPaWF4F670="
+  secret: ${JWT_SECRET}
   access-token-validity: 3600000 #엑세스 토큰 만료 시간
   refresh-token-validity: 120960000 #리프레시 토큰 만료 시간
-
 
 cloud:
   aws:

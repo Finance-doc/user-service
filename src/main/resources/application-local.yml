@@ -1,0 +1,24 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+  autoconfigure:
+  cache:
+    type: none
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update   # 처음엔 create 또는 create-drop도 가능
+      properties:
+        hibernate:
+          dialect: org.hibernate.dialect.MySQLDialect
+          format_sql: true
+          show_sql: true
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/kpaas_report_db
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
