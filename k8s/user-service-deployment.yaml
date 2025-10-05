@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      containers:
+        - name: user-service
+          image: financedoc.kr.ncr.ntruss.com/user-service:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: USER_DATASOURCE_URL
+              value: jdbc:postgresql://user-db.db.svc.cluster.local:5432/userdb
+            - name: USER_DATASOURCE_USERNAME
+              value: user
+            - name: USER_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: user-db-secret
+                  key: USER_DATASOURCE_PASSWORD
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
