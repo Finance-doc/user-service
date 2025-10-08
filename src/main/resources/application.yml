@@ -1,4 +1,9 @@
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
+
   profiles:
     active: k8s
 ---
@@ -6,11 +11,19 @@ spring:
 kakao:
   client-id: ${KAKAO_CLIENT_ID}
   client-secret: ${KAKAO_CLIENT_SECRET}
-  redirect-uri: ${KAKAO_REDIRECT_URI}
+  redirect-uri: http://localhost:8080/user/auth/kakao
   admin-key: ${KAKAO_ADMIN_KEY}
 
 server:
   port: 8080
+  servlet:
+      context-path: /user
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
 
 spring:
   autoconfigure:
@@ -29,7 +42,7 @@ spring:
             scope: # https://developers.kakao.com/docs/latest/ko/kakaologin/common#user-info
               - profile_nickname
               - profile_image
-            redirect-uri: ${KAKAO_REDIRECT_URI}
+            redirect-uri: http://localhost:8080/user/auth/kakao
             client-name: Kakao
 
         provider:
@@ -45,7 +58,7 @@ jwt:
   issuer: Hyerim kim
   secret: ${JWT_SECRET}
   access-token-validity: 3600000 #엑세스 토큰 만료 시간
-  refresh-token-validity: 120960000 #리프레시 토큰 만료 시간
+  refresh-token-validity: 1209600000 #리프레시 토큰 만료 시간
 
 cloud:
   aws:

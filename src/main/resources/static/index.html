@@ -45,9 +45,8 @@
   </p>
 
   <div class="row">
-    <a class="btn" href="/swagger-ui/index.html">Swagger 열기</a>
-    <button id="btnMe">/auth/me 호출</button>
-    <!-- 필요하면 리프레시·로그아웃 버튼을 여기에 추가하세요 -->
+    <a id="btnSwagger" class="btn" href="#">Swagger 열기</a>
+    <button id="btnMe">API 호출</button>
   </div>
   <div class="hint">참고: <code>HttpOnly</code> 쿠키는 JS에서 읽을 수 없지만, 같은 오리진 요청 시 자동으로 전송됩니다.</div>
 
@@ -65,12 +64,22 @@
   const out = $("#output");
   const statusTag = $("#statusTag");
 
+  // 🔹 context-path 자동 감지 (/user or '')
+  const contextPath = window.location.pathname.split('/')[1] || '';
+  const base = contextPath ? `/${contextPath}` : '';
+
+  // 🔹 Swagger 링크 자동 설정
+  $("#btnSwagger").href = `${base}/swagger-ui.html`;
+
+  // 🔹 버튼 텍스트 동적 표시
+  $("#btnMe").textContent = `${base || ''}/auth/me 호출`;
+
   async function callMe() {
     out.textContent = "요청 중...";
     try {
-      const res = await fetch("/auth/me", {
+      const res = await fetch(`${base}/auth/me`, {
         method: "GET",
-        credentials: "include" // 쿠키 포함
+        credentials: "include"
       });
       const text = await res.text();
       let pretty = text;
