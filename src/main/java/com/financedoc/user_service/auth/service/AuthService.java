@@ -1,115 +1,165 @@
 package com.financedoc.user_service.auth.service;
 
+import com.auth0.jwt.interfaces.DecodedJWT;
+import com.financedoc.user_service.auth.security.KakaoAuthClient;
 import com.financedoc.user_service.auth.dto.request.KakaoAuthRequest;
-import com.financedoc.user_service.auth.dto.response.AuthTokensResponse;
+import com.financedoc.user_service.auth.dto.response.*;
+import com.financedoc.user_service.auth.dto.response.KakaoUserInfoResponse.KakaoAccount;
+import com.financedoc.user_service.auth.dto.response.KakaoUserInfoResponse.KakaoAccount.Profile;
 import com.financedoc.user_service.auth.entity.User;
 import com.financedoc.user_service.auth.repository.UserRepository;
-import com.financedoc.user_service.auth.security.JwtTokenProvider;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class AuthService {
 
-    private final KakaoService kakaoService;
-    private final UserService userService;
-    private final JwtTokenProvider jwtTokenProvider;
-    private final UserRepository userRepository;
+    private final KakaoAuthClient kakao;
+    private final UserRepository users;
+    private final TokenService tokens;          // HS256 발급/검증
+    private final RefreshTokenStore refresh;    // jti 화이트리스트
 
-    /** 카카오 로그인: 사용자 인증/가입 → 토큰 "발급만" (파싱 없음) */
+    // === 로그인 (오버로드) ===
     @Transactional
-    public AuthTokensResponse kakaoLogin(KakaoAuthRequest request) {
-        if (request == null || ((request.getCode() == null || request.getCode().isBlank())
-                && (request.getKakaoAccessToken() == null || request.getKakaoAccessToken().isBlank()))) {
-            throw new IllegalArgumentException("code 또는 kakaoAccessToken 중 하나는 필수입니다.");
-        }
-
-        String kakaoAccessToken = request.getKakaoAccessToken();
-        if (kakaoAccessToken == null || kakaoAccessToken.isBlank()) {
-            kakaoAccessToken = kakaoService.getAccessTokenFromKakao(request.getCode());
-        }
-
-        var userInfo = kakaoService.getUserInfo(kakaoAccessToken);
-        User user = userService.registerOrUpdateKakaoUser(userInfo);
-
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("nickname", user.getNickname());
-
-        String accessToken = jwtTokenProvider.createAccessToken(String.valueOf(user.getId()), claims);
-        String refreshToken = jwtTokenProvider.createRefreshToken(String.valueOf(user.getId()), claims);
-
-        userService.updateRefreshToken(user, refreshToken);
-
-        AuthTokensResponse.UserSummary summary = new AuthTokensResponse.UserSummary(
-                user.getId(), user.getNickname(), user.getProfileImageUrl());
-
-        log.info("Successfully authenticated user with kakaoId: {}", user.getKakaoId());
-        return new AuthTokensResponse(accessToken, refreshToken, summary);
+    public AuthTokensResponse kakaoLogin(KakaoAuthRequest req) {
+        return kakaoLogin(req, null); // redirectUri 미지정 시 client 기본값 사용
     }
 
+    @Transactional
+    public AuthTokensResponse kakaoLogin(KakaoAuthRequest req, String redirectUriMaybeNull) {
+        // 1) 카카오 access token 확보
+        String kakaoAccessToken = null;
+        if (StringUtils.hasText(req.getKakaoAccessToken())) {
+            kakaoAccessToken = req.getKakaoAccessToken();
+        } else if (StringUtils.hasText(req.getCode())) {
+            KakaoTokenResponse token = kakao.exchangeCodeForToken(req.getCode(), redirectUriMaybeNull);
+            kakaoAccessToken = token.getAccessToken();
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Either 'code' or 'kakaoAccessToken' is required");
+        }
+
+        // 2) 카카오 유저 조회
+        KakaoUserInfoResponse info = kakao.getUserInfo(kakaoAccessToken);
+        if (info == null || info.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Failed to fetch Kakao user");
+        }
+
+        // 3) upsert(주의: userId NOT NULL 제약)
+        String nickname = extractNickname(info);
+        String profile = extractProfileImage(info);
+        String email = Optional.ofNullable(info.getKakaoAccount()).map(KakaoAccount::getEmail).orElse(null);
+
+        User user = users.findByKakaoId(info.getId())
+                .map(u -> {
+                    boolean changed = false;
+                    if (nickname != null && !nickname.equals(u.getNickname())) { u.setNickname(nickname); changed = true; }
+                    if (profile != null && !Objects.equals(profile, u.getProfileImageUrl())) { u.setProfileImageUrl(profile); changed = true; }
+                    if (email != null && !Objects.equals(email, u.getEmail())) { u.setEmail(email); changed = true; }
+                    if (changed) u.setUpdatedAt(Instant.now());
+                    return changed ? users.save(u) : u;
+                })
+                .orElseGet(() -> users.save(
+                        User.builder()
+                                .kakaoId(info.getId())
+                                .userId(generateUserId())   // ★ NOT NULL/UNIQUE
+                                .email(email)
+                                .nickname(nickname)
+                                .profileImageUrl(profile)
+                                .createdAt(Instant.now())
+                                .updatedAt(Instant.now())
+                                .build()
+                ));
+
+        // 4) 토큰 발급 + 리프레시 저장
+        String access = tokens.createAccessToken(user.getId());
+        String jti = UUID.randomUUID().toString();
+        String refreshToken = tokens.createRefreshToken(user.getId(), jti);
+        refresh.save(user.getId(), jti, Instant.now().plus(14, ChronoUnit.DAYS));
+
+        return new AuthTokensResponse(
+                access,
+                refreshToken,
+                new AuthTokensResponse.UserSummary(user.getId(), user.getNickname(), user.getProfileImageUrl())
+        );
+    }
+
+    // === 액세스 토큰 재발급(검증 + sub 일치) ===
+    @Transactional(readOnly = true)
+    public String refreshAccessToken(Long userIdFromHeader, String refreshToken) {
+        DecodedJWT jwt = tokens.verify(refreshToken);
+        if (!"refresh".equals(jwt.getClaim("typ").asString())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not a refresh token");
+        }
+        long sub = parseUserId(jwt);
+        if (sub != userIdFromHeader) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token subject mismatch");
+        }
+        String jti = jwt.getId();
+        if (!refresh.exists(sub, jti)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh invalidated");
+        }
+        return tokens.createAccessToken(sub);
+    }
+
+    // === 로그아웃(해당 refresh jti만 폐기) ===
+    @Transactional
+    public void logout(Long userIdFromHeader, String refreshToken) {
+        DecodedJWT jwt = tokens.verify(refreshToken);
+        if (!"refresh".equals(jwt.getClaim("typ").asString())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not a refresh token");
+        }
+        long sub = parseUserId(jwt);
+        if (sub != userIdFromHeader) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token subject mismatch");
+        }
+        refresh.revoke(sub, jwt.getId());
+    }
+
+    // === 현재 사용자 조회 ===
+    @Transactional(readOnly = true)
+    public UserResponse getCurrentUser(Long userId) {
+        User u = users.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        return new UserResponse(u.getId(), u.getNickname(), u.getProfileImageUrl());
+    }
+
+    // === 회원 탈퇴 ===
     @Transactional
     public void deleteUser(Long userId) {
-        userService.deleteUser(userId);
+        if (!users.existsById(userId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+        }
+        users.deleteById(userId);
+        refresh.revokeAll(userId);
     }
 
-    /**
-     * 리프레시로 액세스 재발급.
-     * - 게이트웨이가 refresh JWT를 검증/파싱해서 X-User-Id 헤더로 userId를 내려줌
-     * - 여기서는 DB의 저장된 refreshToken과 "문자열 일치"만 확인하고 새 access 발급
-     */
-    @Transactional
-    public String refreshAccessToken(String userIdFromGateway, String providedRefreshToken) {
-        if (userIdFromGateway == null || userIdFromGateway.isBlank()) {
-            throw new SecurityException("user_id가 필요합니다.");
-        }
-        if (providedRefreshToken == null || providedRefreshToken.isBlank()) {
-            throw new IllegalArgumentException("리프레시 토큰이 필요합니다.");
-        }
-
-        User user = userRepository.findById(Long.parseLong(userIdFromGateway))
-                .orElseThrow(() -> new EntityNotFoundException("사용자를 찾을 수 없습니다."));
-
-        if (!userService.validateRefreshToken(user, providedRefreshToken)) {
-            throw new SecurityException("유효하지 않은 리프레시 토큰입니다.");
-        }
-
-        // 필요한 클레임만 재구성 (만료/발급시각 같은 표준클레임은 JWT 빌더가 새로 넣음)
-        Map<String, Object> newClaims = new HashMap<>();
-        newClaims.put("nickname", user.getNickname());
-
-        return jwtTokenProvider.createAccessToken(String.valueOf(user.getId()), newClaims);
+    // --- helpers ---
+    private static String generateUserId() {
+        return "U" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
     }
-
-    /**
-     * 로그아웃.
-     * - 게이트웨이가 refresh JWT를 검증/파싱해서 X-User-Id 헤더로 userId를 내려줌
-     * - 여기서는 저장된 refresh와 문자열 일치만 확인 후 무효화
-     */
-    @Transactional
-    public void logout(String userIdFromGateway, String providedRefreshToken) {
-        if (userIdFromGateway == null || userIdFromGateway.isBlank()) {
-            throw new SecurityException("user_id가 필요합니다.");
-        }
-        if (providedRefreshToken == null || providedRefreshToken.isBlank()) {
-            throw new IllegalArgumentException("리프레시 토큰이 필요합니다.");
-        }
-
-        User user = userRepository.findById(Long.parseLong(userIdFromGateway))
-                .orElseThrow(() -> new EntityNotFoundException("사용자를 찾을 수 없습니다."));
-
-        if (!userService.validateRefreshToken(user, providedRefreshToken)) {
-            throw new SecurityException("유효하지 않은 리프레시 토큰입니다.");
-        }
-
-        userService.logout(user);
-        log.info("User logged out successfully: userId={}", userIdFromGateway);
+    private static long parseUserId(DecodedJWT jwt) {
+        try { return Long.parseLong(jwt.getSubject()); }
+        catch (NumberFormatException e) { throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid subject"); }
+    }
+    private static String extractNickname(KakaoUserInfoResponse info) {
+        return Optional.ofNullable(info.getKakaoAccount())
+                .map(KakaoAccount::getProfile).map(Profile::getNickName)
+                .orElseGet(() -> Optional.ofNullable(info.getProperties()).map(m -> m.get("nickname")).orElse(null));
+    }
+    private static String extractProfileImage(KakaoUserInfoResponse info) {
+        return Optional.ofNullable(info.getKakaoAccount())
+                .map(KakaoAccount::getProfile).map(Profile::getProfileImageUrl)
+                .orElseGet(() -> Optional.ofNullable(info.getProperties()).map(m -> m.get("profile_image")).orElse(null));
     }
 }
