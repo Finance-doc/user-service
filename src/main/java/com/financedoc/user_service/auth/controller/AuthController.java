@@ -120,10 +120,9 @@ public class AuthController {
     @Operation(summary = "액세스 토큰 갱신", description = "리프레시 토큰으로 새 액세스 토큰 발급(서버는 typ=refresh, jti 화이트리스트, sub 일치 검증)")
     @ApiResponse(responseCode = "200", description = "갱신 성공", content = @Content(schema = @Schema(implementation = NewAccessTokenResponse.class)))
     public ResponseEntity<NewAccessTokenResponse> refresh(
-            @RequestHeader("X-User-Id") Long userId,
             @RequestBody RefreshTokenRequest request
     ) {
-        String newAccessToken = authService.refreshAccessToken(userId, request.getRefreshToken());
+        String newAccessToken = authService.refreshAccessToken(request.getRefreshToken());
         return ResponseEntity.ok(new NewAccessTokenResponse(newAccessToken));
     }
 

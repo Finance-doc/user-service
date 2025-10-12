@@ -96,16 +96,13 @@ public class AuthService {
 
     // === 액세스 토큰 재발급(검증 + sub 일치) ===
     @Transactional(readOnly = true)
-    public String refreshAccessToken(Long userIdFromHeader, String refreshToken) {
+    public String refreshAccessToken(String refreshToken) {
         DecodedJWT jwt = tokens.verify(refreshToken);
         if (!"refresh".equals(jwt.getClaim("typ").asString())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not a refresh token");
         }
-        long sub = parseUserId(jwt);
-        if (sub != userIdFromHeader) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token subject mismatch");
-        }
-        String jti = jwt.getId();
+        long sub = parseUserId(jwt);    // refresh token 안의 sub에서 userId 추출
+        String jti = jwt.getId();       // refresh token 고유 ID 추출
         if (!refresh.exists(sub, jti)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh invalidated");
         }
