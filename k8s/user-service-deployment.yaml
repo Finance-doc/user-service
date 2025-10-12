@@ -20,6 +20,8 @@ spec:
           ports:
             - containerPort: 8080
           env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: k8s
             - name: USER_DATASOURCE_URL
               value: jdbc:postgresql://user-db.db.svc.cluster.local:5432/userdb
             - name: USER_DATASOURCE_USERNAME
@@ -29,10 +31,29 @@ spec:
                 secretKeyRef:
                   name: user-db-secret
                   key: USER_DATASOURCE_PASSWORD
-          resources:
-            requests:
-              memory: "128Mi"
-              cpu: "100m"
-            limits:
-              memory: "256Mi"
-              cpu: "200m"
+            - name: KAKAO_CLIENT_ID
+              value: ecaeda093cbe23fb23a3a1abfc3e1512
+            - name: KAKAO_CLIENT_SECRET
+              value: GV2fGHscgidbAMGOtz1dywjjgPvia0TO
+            - name: KAKAO_REDIRECT_URI
+              value: http://localhost:8080/auth/kakao
+            - name: KAKAO_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: user-secret
+                  key: KAKAO_ADMIN_KEY
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: user-secret
+                  key: JWT_SECRET
+            - name: aws_access_key
+              valueFrom:
+                secretKeyRef:
+                  name: user-secret-2
+                  key: aws_access_key
+            - name: aws_secret_key
+              valueFrom:
+                secretKeyRef:
+                  name: user-secret-2
+                  key: aws_secret_key
