@@ -36,7 +36,7 @@ spec:
             - name: KAKAO_CLIENT_SECRET
               value: GV2fGHscgidbAMGOtz1dywjjgPvia0TO
             - name: KAKAO_REDIRECT_URI
-              value: http://localhost:8080/auth/kakao
+              value: http://localhost:8080/user/auth/kakao
             - name: KAKAO_ADMIN_KEY
               valueFrom:
                 secretKeyRef:
