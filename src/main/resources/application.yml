@@ -1,11 +1,12 @@
-spring:
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
-      - org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
+server:
+  port: 8080
+  servlet:
+    context-path: /user
 
+spring:
   profiles:
     active: k8s
+
 ---
 
 kakao:
@@ -13,11 +14,6 @@ kakao:
   client-secret: ${KAKAO_CLIENT_SECRET}
   redirect-uri: http://localhost:8080/user/auth/kakao
   admin-key: ${KAKAO_ADMIN_KEY}
-
-server:
-  port: 8080
-  servlet:
-      context-path: /user
 
 springdoc:
   swagger-ui:
@@ -57,14 +53,5 @@ spring:
 jwt:
   issuer: Hyerim kim
   secret: ${JWT_SECRET}
-  access-token-validity: 3600000 #엑세스 토큰 만료 시간
+  access-token-validity: 180000 #엑세스 토큰 만료 시간
   refresh-token-validity: 1209600000 #리프레시 토큰 만료 시간
-
-cloud:
-  aws:
-    credentials:
-      access-key: ${aws_access_key}
-      secret-key: ${aws_secret_key}
-
-    region:
-      static: ap-northeast-2
