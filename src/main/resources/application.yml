@@ -53,5 +53,5 @@ spring:
 jwt:
   issuer: Hyerim kim
   secret: ${JWT_SECRET}
-  access-token-validity: 900000  #엑세스 토큰 만료 시간
-  refresh-token-validity: 1209600000 #리프레시 토큰 만료 시간
+  access-token-validity: 1209600000  # 900000
+  refresh-token-validity: 1209600000 
