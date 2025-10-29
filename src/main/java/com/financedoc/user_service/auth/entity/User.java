@@ -19,10 +19,13 @@ public class User {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "kakao_id", nullable = false, unique = true)
+    @Column(name = "password")
+    private String password;
+
+    @Column(name = "kakao_id", unique = true)
     private Long kakaoId;
 
-    @Column(name="user_id", unique = true, nullable = false)
+    @Column(name="user_id", unique = true)
     private String userId;
 
     @Column(name = "email")
